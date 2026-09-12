@@ -61,3 +61,23 @@ scripts/deploy.sh   # → copy to SD card as app.elf (auto-runs on RT-SMART)
   service implements (mirrors the nRF54L15 firmware contract).
 - `docs/bringup.md` — SPI/IRQ bring-up measurements and the cross-core
   channel findings.
+
+## No-hardware integration test (PTY simulator)
+
+`host/sim_device.py` implements this repo's contract in Python over a PTY —
+the real node connects to it as its serial port, exercising the host's
+parser, handshake, stats cadence, scan flow and `[FB]` reassembly on x86:
+
+```sh
+python3 host/sim_device.py --symlink /tmp/lr2021-sim &
+cd ../superlexicon
+# sim-config.json: lr2021.serial_port=/tmp/lr2021-sim, reset_on_open=false,
+# tx_chunk_gap_ms=0, fresh data dir, roamer (non-validator)
+./target/release/superlexicon-app --config sim-config.json
+```
+
+Pass criteria (bench 2026-09-12): READY handshake at 252 B, scan sweep
+command → D 50-53 → best-channel tune, zero session teardowns past the
+60 s silence timeout, and `FLRC burst reassembled ... CRC ok` for the
+sim's padded `[FB]` bursts (which found a real host bug — see the
+superlexicon commit "padded-burst reassembly").
