@@ -9,12 +9,32 @@
 #include "radio_worker.hpp"
 
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
 
 #include <cstdio>
 
 #include <Module.h>
+#include "burst.hpp"
+#include "rt_fpioa.h" // pin_gpio_t
+
+// GPIO ioctl contract (mirrors k230Hal.cpp / the canaan gpio driver).
+#define GPIO_DM_OUTPUT  _IOW('G', 0, int)
+#define GPIO_DM_INPUT   _IOW('G', 1, int)
+#define GPIO_WRITE_LOW  _IOW('G', 4, int)
+#define GPIO_WRITE_HIGH _IOW('G', 5, int)
+
+// Widen a few protected LR20xx config methods — the LILYGO wrapper doesn't
+// expose them, but air-format interop with the nRF nodes needs them.
+class K230Radio : public LR2021 {
+public:
+  K230Radio(Module *m) : LR2021(m) {}
+  using LR2021::setFLRCSyncWord;
+  using LR2021::setPacketParamsFLRC;
+  using LR2021::setModulationParamsFLRC;
+  using LR2021::setCRC;
+};
 
 using namespace burst;
 
@@ -55,13 +75,14 @@ bool RadioWorker::init(const Callbacks &cb, int power_gpio) {
 
   // Module(cs=14, irq=NC, rst=5, gpio=NC) — the patched Module ctor
   // auto-instantiates k230Hal (fpioa mux + /dev/spi1 + reset pulse).
-  radio_ = new LR2021(new Module(14, RADIOLIB_NC, 5, RADIOLIB_NC));
+  K230Radio *k = new K230Radio(new Module(14, RADIOLIB_NC, 5, RADIOLIB_NC));
+  radio_ = k;
 
   // FLRC 2.6 Mbps (BR_2_600_BW_2_6 = 0x00), CR 1/1 — the air profile the
   // nRF nodes use (their CONFIG coding_rate is stored but never applied).
   // tcxo 1.8 V per the EVK (matches the nRF overlay's tcxo-voltage).
-  int16_t st = radio_->beginFLRC(916.5f, RADIOLIB_LR20xx_FLRC_BR_2_600_BW_2_6,
-                                 1, 20, 16, 1.8f, 0);
+  int16_t st = k->beginFLRC(916.5f, RADIOLIB_LR20xx_FLRC_BR_2_600_BW_2_6,
+                            1, 20, 16, 1.8f, 0);
   if (st != RADIOLIB_ERR_NONE) {
     if (cb_.on_log) {
       cb_.on_log("radio init failed: " + std::to_string(st));
@@ -72,7 +93,7 @@ bool RadioWorker::init(const Callbacks &cb, int power_gpio) {
   // Air sync word: the nRF nodes' fixed bytes 90 56 34 12 (host config
   // value 0x12345690, LE on air). Byte order on the wire is a Phase-1
   // bring-up check against a captured nRF frame.
-  radio_->setFLRCSyncWord(0, 0x12345690u);
+  k->setFLRCSyncWord(0, 0x12345690u);
 
   radio_ok_ = true;
   st_.burst_mode = 0;

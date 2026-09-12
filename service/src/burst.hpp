@@ -50,7 +50,8 @@ inline void encode_packet(uint8_t *out, size_t out_cap, uint16_t burst_id,
                           uint16_t idx, uint16_t total,
                           const uint8_t *payload, uint32_t total_len,
                           size_t *out_len) {
-  Header h{burst_id, idx, total, total_len, crc32(payload, total_len)};
+  Header h{kMagic,   burst_id, idx, total,
+           total_len, crc32(payload, total_len)};
   std::memcpy(out, &h, sizeof(h));
   uint32_t off = static_cast<uint32_t>(idx) * kChunk;
   uint32_t take = total_len - off;

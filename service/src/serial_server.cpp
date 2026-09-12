@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "burst.hpp"
+
 using namespace burst;
 
 namespace serial {

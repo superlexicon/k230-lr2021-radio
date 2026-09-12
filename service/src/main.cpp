@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
   const char *uart = (argc > 1) ? argv[1] : "/dev/ttyS1";
   uint32_t baud = (argc > 2) ? static_cast<uint32_t>(atoi(argv[2])) : 115200;
 
-  radio::RadioWorker::Callbacks cb;
+  radio::Callbacks cb;
   cb.on_rx_packet = [](const uint8_t *pkt, size_t len, int16_t rssi) {
     if (g_server) {
       g_server->onWorkerRx(pkt, len, rssi);
