@@ -85,6 +85,9 @@ drop/re-establish within 15 s).
 ## 2. Device → host frames
 
 - **'G' READY**: `47 | max_payload:u16 LE` — value is the **on-air packet
+  payload** (the nRF firmware's v2 frame appends a protocol-version byte;
+  this service deliberately stays legacy — see serial_server.cpp, the
+  fleet-parity cliff)
   size** (252, or 511 after a v2 CONFIG with payload_sel=1), not the burst
   cap. Sent: after radio init at boot, after every TX completion, as the ack
   for `C` and `W`.
@@ -130,7 +133,7 @@ drop/re-establish within 15 s).
 - CRC32: IEEE 802.3 reflected (init 0xFFFFFFFF, poly 0xEDB88320 shifted
   right per LSB, final inversion; returns 0 for empty input).
 - FLRC air parameters (fixed): sync word bytes `90 56 34 12`, coding rate 1/1,
-  2.6 Mbps raw, min inter-frame gap 2000 µs.
+  2.6 Mbps raw, min inter-frame gap 220 µs (fleet parity, flrc c35f669).
 - Discovery payloads begin `SLMT`/`TMLS`; consensus payloads begin
   `SLRF 01 01 5F 76 [msg_type]` (full magic `53 4C 52 46 01 01 5F 76`).
 

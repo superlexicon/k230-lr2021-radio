@@ -94,6 +94,14 @@ void SerialServer::onWorkerLog(const std::string &line) {
 }
 
 void SerialServer::writeReady(uint16_t max_payload) {
+  // LEGACY READY BY DESIGN (fleet-parity cliff, 2026-10-07): the nRF
+  // firmware's v2 frame appends a protocol-version byte, which invites
+  // the host to send CONFIG v2 selectors (rate/packet-payload). The fleet
+  // runs the legacy 252 B profile today; a v2 handshake here would let
+  // the host set payload_sel=1 (511 B) on this node alone — a chunk
+  // stride no peer shares. Keep legacy until a fleet-wide coordinated
+  // 511 B migration (then: append FLRC_PROTOCOL_VERSION and apply
+  // payload_sel through a runtime chunk size).
   std::lock_guard<std::recursive_mutex> lk(write_mu_);
   uint8_t p[2] = {static_cast<uint8_t>(max_payload & 0xFF),
                   static_cast<uint8_t>((max_payload >> 8) & 0xFF)};
@@ -166,6 +174,11 @@ void SerialServer::handleConfig(const uint8_t *body, uint8_t len) {
   c.role = body[14];
   c.body_len = len;
   if (len >= 17) {
+    // CONFIG v2 selectors are parsed but NOT applied: this radio's air
+    // profile is the fleet's compiled 252 B / 2.6 Mbps (see writeReady —
+    // READY stays legacy, so a well-behaved host never sends these).
+    // Applying payload_sel here alone would diverge the chunk stride
+    // from the nRF peers.
     c.rate_sel = body[15];
     c.payload_sel = body[16];
   }

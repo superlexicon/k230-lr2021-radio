@@ -1,5 +1,20 @@
 // Radio worker implementation — see radio_worker.hpp.
 //
+// DESIGN PARITY (synced 2026-10-07 against lr2021-flrc-firmware@684a158):
+// - Interframe pacing 220 µs (flrc c35f669) — ported below.
+// - Per-burst burst-id anti-collision (flrc 684a158): already implemented
+//   here (incrementing counter XOR per-boot offset, 0 skipped).
+// - READY v2 / CONFIG v2 selectors (flrc 87509e1): DELIBERATELY NOT
+//   ported — the nRF fleet runs the legacy 252 B profile (the node logs
+//   "firmware did not negotiate v2"), and advertising v2 would let the
+//   host apply payload_sel=1 (511 B) on this node alone: a different
+//   chunk stride than the peers, breaking [FB] reassembly. Revisit only
+//   as a fleet-wide coordinated change (see serial_server.cpp).
+// - RX burst timeout margin 30 s (flrc cb8e33c): NOT APPLICABLE — this
+//   worker arms RX via RadioLib's RADIOLIB_LR20xx_RX_TIMEOUT_INF
+//   (continuous), so the nRF's 2.2 s re-arm-cycling bug has no
+//   equivalent here.
+//
 // Threading: one worker rt_thread owns the radio exclusively. The serial
 // server only enqueues TX frames (mutex-guarded) and receives callbacks.
 // IRQ handling is POLLED (this HAL has no GPIO interrupts): the worker
@@ -226,8 +241,11 @@ bool RadioWorker::transmitBurst(const uint8_t *payload, size_t len,
       *err = "tx timeout";
       return false;
     }
-    // min inter-frame gap on air (nRF: 2000 µs)
-    sleepUs(2000);
+    // INTERFRAME PACING (flrc c35f669, ported 2026-10-07): the flrc_burst
+    // reference sample's 220 µs — the nRF fleet's current pacing. Halves
+    // every burst's air time vs the old 2000 µs; this worker's 100 µs
+    // TX_DONE poll cadence catches completion well inside the gap.
+    sleepUs(220);
   }
   return true;
 }
