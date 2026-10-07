@@ -5,11 +5,12 @@
 // - Per-burst burst-id anti-collision (flrc 684a158): already implemented
 //   here (incrementing counter XOR per-boot offset, 0 skipped).
 // - READY v2 / CONFIG v2 selectors (flrc 87509e1): DELIBERATELY NOT
-//   ported — the nRF fleet runs the legacy 252 B profile (the node logs
-//   "firmware did not negotiate v2"), and advertising v2 would let the
-//   host apply payload_sel=1 (511 B) on this node alone: a different
-//   chunk stride than the peers, breaking [FB] reassembly. Revisit only
-//   as a fleet-wide coordinated change (see serial_server.cpp).
+//   ported — the flashed nRF build predates the v2 READY (no version
+//   byte; the node logs "did not negotiate v2") while running the 511 B
+//   profile. Keeping this node's READY legacy too holds the serial
+//   surface identical to the fleet. (Advertising v2 would actually be
+//   safe today — the host's selectors resolve to the same 511 B — but
+//   legacy is the smaller surface until the v2 firmware ships fleet-wide.)
 // - RX burst timeout margin 30 s (flrc cb8e33c): NOT APPLICABLE — this
 //   worker arms RX via RadioLib's RADIOLIB_LR20xx_RX_TIMEOUT_INF
 //   (continuous), so the nRF's 2.2 s re-arm-cycling bug has no

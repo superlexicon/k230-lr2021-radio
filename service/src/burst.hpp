@@ -12,9 +12,13 @@ namespace burst {
 
 constexpr uint16_t kMagic = 0x4642;              // 'FB' — on-air LE bytes 42 46
 constexpr uint32_t kMaxTotalPayload = 12288;
-constexpr uint16_t kPacketPayload = 252;         // fixed in v1 (nRF default)
-constexpr uint16_t kChunk = kPacketPayload - 16; // 236
-constexpr uint16_t kMaxPackets = 53;
+// FLEET AIR PROFILE (corrected 2026-10-07): the flashed nRF firmware runs
+// g_pkt_payload = 511 (its TX-terminal READY reports max_payload=511 —
+// verified live; the pre-v2 build predates the 252 B ALT default). Every
+// [FB] air packet is 511 B: 16 B header + 495 B chunk.
+constexpr uint16_t kPacketPayload = 511;
+constexpr uint16_t kChunk = kPacketPayload - 16; // 495
+constexpr uint16_t kMaxPackets = 25;             // ceil(12288 / 495)
 constexpr size_t kHeaderLen = 16;
 
 // IEEE 802.3 reflected CRC32 — identical to the firmware and the host

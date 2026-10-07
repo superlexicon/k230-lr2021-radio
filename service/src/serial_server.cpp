@@ -74,7 +74,7 @@ void SerialServer::onWorkerRx(const uint8_t *pkt, size_t len, int16_t rssi) {
 
 void SerialServer::onWorkerTerminal(radio::Terminal t) {
   if (t == radio::Terminal::kOk) {
-    writeReady(252); // 'G' terminal — confirmed aired
+    writeReady(511); // 'G' terminal — confirmed aired
   } else {
     uint8_t code = static_cast<uint8_t>(t);
     writeError(code, code == 0x05 ? "tx aborted" : "tx dropped");
@@ -94,14 +94,14 @@ void SerialServer::onWorkerLog(const std::string &line) {
 }
 
 void SerialServer::writeReady(uint16_t max_payload) {
-  // LEGACY READY BY DESIGN (fleet-parity cliff, 2026-10-07): the nRF
-  // firmware's v2 frame appends a protocol-version byte, which invites
-  // the host to send CONFIG v2 selectors (rate/packet-payload). The fleet
-  // runs the legacy 252 B profile today; a v2 handshake here would let
-  // the host set payload_sel=1 (511 B) on this node alone — a chunk
-  // stride no peer shares. Keep legacy until a fleet-wide coordinated
-  // 511 B migration (then: append FLRC_PROTOCOL_VERSION and apply
-  // payload_sel through a runtime chunk size).
+  // LEGACY READY SHAPE (2026-10-07): [G][max_payload:u16] — no protocol
+  // version byte, matching the flashed nRF build (its TX terminals report
+  // max_payload=511 with no version byte; the node logs "did not
+  // negotiate v2" and keeps CONFIG at the legacy 15-byte body). The
+  // max_payload VALUE is 511 — the fleet's on-air packet size. (v2 could
+  // be advertised safely — the host's selectors would set the same 511 B
+  // profile — but legacy keeps the serial surface identical to the fleet
+  // until the v2 build ships everywhere.)
   std::lock_guard<std::recursive_mutex> lk(write_mu_);
   uint8_t p[2] = {static_cast<uint8_t>(max_payload & 0xFF),
                   static_cast<uint8_t>((max_payload >> 8) & 0xFF)};
@@ -175,10 +175,11 @@ void SerialServer::handleConfig(const uint8_t *body, uint8_t len) {
   c.body_len = len;
   if (len >= 17) {
     // CONFIG v2 selectors are parsed but NOT applied: this radio's air
-    // profile is the fleet's compiled 252 B / 2.6 Mbps (see writeReady —
-    // READY stays legacy, so a well-behaved host never sends these).
-    // Applying payload_sel here alone would diverge the chunk stride
-    // from the nRF peers.
+    // profile is the fleet's 511 B / 2.6 Mbps (see burst.hpp / writeReady
+    // — READY stays legacy, so a well-behaved host never sends these).
+    // rate_sel=1 and payload_sel=1 would be no-ops today; payload_sel=0
+    // (252 B) WOULD diverge the chunk stride from the nRF peers and is
+    // deliberately ignored.
     c.rate_sel = body[15];
     c.payload_sel = body[16];
   }
@@ -198,7 +199,7 @@ void SerialServer::handleConfig(const uint8_t *body, uint8_t len) {
       p.dwell_ms = 50;
     }
     worker_->startScan(p);
-    writeReady(252);
+    writeReady(511);
     return;
   }
 
@@ -211,7 +212,7 @@ void SerialServer::handleConfig(const uint8_t *body, uint8_t len) {
     writeError(0x03, err.c_str());
     return;
   }
-  writeReady(252);
+  writeReady(511);
 }
 
 void SerialServer::handleScanQ(uint8_t count, uint32_t dwell_ms,
@@ -295,7 +296,7 @@ void SerialServer::run() {
     struct timespec slp{0, 100000000};
     nanosleep(&slp, nullptr);
   }
-  writeReady(252);
+  writeReady(511);
   ready_sent_ = true;
   last_stats_ms_ = nowMs();
   writeStats();
@@ -363,7 +364,7 @@ void SerialServer::run() {
                           (static_cast<uint32_t>(window_body_[5]) << 8) |
                           (static_cast<uint32_t>(window_body_[6]) << 16) |
                           (static_cast<uint32_t>(window_body_[7]) << 24);
-        writeReady(252);
+        writeReady(511);
         state_ = State::kTag;
       }
       break;
