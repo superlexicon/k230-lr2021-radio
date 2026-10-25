@@ -312,18 +312,24 @@ void SerialServer::run() {
     uint32_t now = nowMs();
     uint32_t since_arrival = now - last_arrival_ms_;
 
-    if (skip_remain_ > 0 && state_ != State::kTag) {
+    if ((state_ != State::kTag || skip_remain_ > 0) && since_arrival > 100) {
+      if (state_ == State::kPayload || state_ == State::kConfig ||
+          state_ == State::kSetWindow || state_ == State::kLenHi) {
+        parser_frames_killed_++;
+      }
+      skip_remain_ = 0;
+      state_ = State::kTag;
+      have_ = 0;
+    }
+    last_arrival_ms_ = now;
+
+    if (skip_remain_ > 0) {
       skip_remain_--;
       continue;
     }
 
     switch (state_) {
     case State::kTag:
-      if (since_arrival > 100 && state_ != State::kTag) {
-        state_ = State::kTag;
-        have_ = 0;
-      }
-      last_arrival_ms_ = now;
       tag_ = b;
       if (b == 'T') {
         state_ = State::kTxMagic;
@@ -345,7 +351,6 @@ void SerialServer::run() {
       break;
 
     case State::kTxMagic:
-      last_arrival_ms_ = now;
       if (b != 'X') {
         state_ = State::kTag; // drop, resume scanning
         break;
@@ -385,8 +390,9 @@ void SerialServer::run() {
           have_ = 0;
         }
       } else if (tag_ == 'T') {
-        if (frame_len_ == 0 || frame_len_ > 12288) {
+        if (frame_len_ == 0 || frame_len_ > kMaxTotalPayload) {
           writeError(0x02, "bad tx len");
+          skip_remain_ = frame_len_;
           state_ = State::kTag;
         } else {
           state_ = State::kPayload;
@@ -407,7 +413,7 @@ void SerialServer::run() {
       break;
 
     case State::kPayload: {
-      static uint8_t tx_buf[12288];
+      static uint8_t tx_buf[kMaxTotalPayload];
       tx_buf[have_++] = b;
       if (have_ == frame_len_) {
         handleTx(tx_buf, frame_len_);

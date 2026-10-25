@@ -11,14 +11,16 @@
 namespace burst {
 
 constexpr uint16_t kMagic = 0x4642;              // 'FB' — on-air LE bytes 42 46
-constexpr uint32_t kMaxTotalPayload = 12288;
-// FLEET AIR PROFILE (corrected 2026-10-07): the flashed nRF firmware runs
-// g_pkt_payload = 511 (its TX-terminal READY reports max_payload=511 —
-// verified live; the pre-v2 build predates the 252 B ALT default). Every
-// [FB] air packet is 511 B: 16 B header + 495 B chunk.
+constexpr uint32_t kMaxTotalPayload = 24576;
+// FLEET AIR PROFILE (corrected 2026-10-07, 24KB burst cap 2026-10-26): the
+// flashed nRF firmware runs g_pkt_payload = 511 (its TX-terminal READY
+// reports max_payload=511 — verified live; the pre-v2 build predates the
+// 252 B ALT default). Every [FB] air packet is 511 B: 16 B header + 495 B
+// chunk, up to 50 packets (24,576 B total payload) per burst.
 constexpr uint16_t kPacketPayload = 511;
 constexpr uint16_t kChunk = kPacketPayload - 16; // 495
-constexpr uint16_t kMaxPackets = 25;             // ceil(12288 / 495)
+constexpr uint16_t kMaxPackets = 50;             // ceil(24576 / 495)
+constexpr uint16_t kMaxAirPacketsAlt = 105;      // ceil(24576 / 236) for 252B ALT headers
 constexpr size_t kHeaderLen = 16;
 
 // IEEE 802.3 reflected CRC32 — identical to the firmware and the host
@@ -53,9 +55,9 @@ static_assert(sizeof(Header) == kHeaderLen, "header must be 16 bytes");
 inline void encode_packet(uint8_t *out, size_t out_cap, uint16_t burst_id,
                           uint16_t idx, uint16_t total,
                           const uint8_t *payload, uint32_t total_len,
-                          size_t *out_len) {
-  Header h{kMagic,   burst_id, idx, total,
-           total_len, crc32(payload, total_len)};
+                          uint32_t payload_crc, size_t *out_len) {
+  (void)out_cap;
+  Header h{kMagic, burst_id, idx, total, total_len, payload_crc};
   std::memcpy(out, &h, sizeof(h));
   uint32_t off = static_cast<uint32_t>(idx) * kChunk;
   uint32_t take = total_len - off;
@@ -70,6 +72,14 @@ inline void encode_packet(uint8_t *out, size_t out_cap, uint16_t burst_id,
   *out_len = kPacketPayload;
 }
 
+inline void encode_packet(uint8_t *out, size_t out_cap, uint16_t burst_id,
+                          uint16_t idx, uint16_t total,
+                          const uint8_t *payload, uint32_t total_len,
+                          size_t *out_len) {
+  encode_packet(out, out_cap, burst_id, idx, total, payload, total_len,
+                crc32(payload, total_len), out_len);
+}
+
 // Parse a received raw air packet. Returns false on malformed headers.
 inline bool decode_header(const uint8_t *pkt, size_t len, Header *h) {
   if (len < kHeaderLen) {
@@ -79,7 +89,7 @@ inline bool decode_header(const uint8_t *pkt, size_t len, Header *h) {
   if (h->magic != kMagic) {
     return false;
   }
-  if (h->total_packets == 0 || h->total_packets > kMaxPackets) {
+  if (h->total_packets == 0 || h->total_packets > kMaxAirPacketsAlt) {
     return false;
   }
   if (h->total_payload_len == 0 || h->total_payload_len > kMaxTotalPayload) {

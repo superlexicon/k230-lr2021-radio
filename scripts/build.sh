@@ -18,8 +18,10 @@ if [ ! -d "$MPP" ]; then
   exit 1
 fi
 
+pushd "$MPP" >/dev/null
 # shellcheck disable=SC1091
-source "$MPP/build_env.sh"
+source ./build_env.sh
+popd >/dev/null
 
 make -C "$REPO/service" LILYGO_SDK="$SDK" "$@"
 echo "→ $REPO/build/lora_radio.elf"

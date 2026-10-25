@@ -24,11 +24,11 @@ The device runs a byte-at-a-time tag state machine (states:
   before tag scanning resumes. `expected` = 15 for CONFIG (always 15, even for
   a 17-byte v2 body — historical quirk), 8 for SET_WINDOW, else `frame_len`.
 - CONFIG length ∉ {15, 17} → `E` code 0x03 "bad len".
-- TX length == 0 or > 12288 → `E` code 0x02 "bad tx len".
+- TX length == 0 or > 24576 → `E` code 0x02 "bad tx len" (and `skip_remain = frame_len` bytes are drained so oversized payload bytes are not parsed as tags).
 
 ### 'T' — transmit (2-byte magic)
 ```
-54 58 | len:u16 LE | payload[len]        (len 1..12288)
+54 58 | len:u16 LE | payload[len]        (len 1..24576)
 ```
 Second byte must be `'X'` or the frame is dropped silently (resume at TAG).
 No ack at accept time (only `D` event 47). **Exactly one terminal** is sent
@@ -92,7 +92,7 @@ drop/re-establish within 15 s).
   cap. Sent: after radio init at boot, after every TX completion, as the ack
   for `C` and `W`.
 - **'R' RX**: `52 | len:u16 LE | payload[len] | rssi:i16 LE` — one packet per
-  frame, len ≤ 12288 (host guard rejects >24600). The K230 service forwards
+  frame, len ≤ 24576 (host guard rejects >24576). The K230 service forwards
   **raw air packets including their `[FB]` headers**; the host reassembles.
 - **'E' ERROR**: `45 | code:u8 | msg_len:u8 | msg[msg_len]` (1-byte length).
   Codes: 0x01 radio init, 0x02 payload too big, 0x03 bad config,
@@ -126,10 +126,11 @@ drop/re-establish within 15 s).
 | 8 | u32 | total_payload_len |
 | 12 | u32 | payload_crc32 (over the whole reassembled payload) |
 
-- Max total payload **12288 B**; packet payload 252 B (chunk = 236) or 511 B
-  (chunk = 495); ≤53 packets per burst; every packet padded to the full
-  packet size with zeros; chunk i sits at payload offset `i × chunk`.
-- RX validity: total_packets 1..=53, total_len 1..=12288, idx < total.
+- Max total payload **24576 B** (24 KB); packet payload 252 B (chunk = 236) or
+  511 B (chunk = 495); ≤50 packets per burst @ 511 B (≤105 @ 252 B); every
+  packet padded to the full packet size with zeros; chunk i sits at payload
+  offset `i × chunk`.
+- RX validity: total_packets 1..=105, total_len 1..=24576, idx < total.
 - CRC32: IEEE 802.3 reflected (init 0xFFFFFFFF, poly 0xEDB88320 shifted
   right per LSB, final inversion; returns 0 for empty input).
 - FLRC air parameters (fixed): sync word bytes `90 56 34 12`, coding rate 1/1,

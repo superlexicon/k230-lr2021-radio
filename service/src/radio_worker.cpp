@@ -1,9 +1,15 @@
 // Radio worker implementation — see radio_worker.hpp.
 //
-// DESIGN PARITY (synced 2026-10-07 against lr2021-flrc-firmware@684a158):
+// DESIGN PARITY (synced 2026-10-26 against lr2021-flrc-firmware@97b895a):
+// - 24 KB (24,576 B) max burst payload / 50 packets @ 511 B (flrc 97b895a).
 // - Interframe pacing 220 µs (flrc c35f669) — ported below.
-// - Per-burst burst-id anti-collision (flrc 684a158): already implemented
-//   here (incrementing counter XOR per-boot offset, 0 skipped).
+// - Per-burst burst-id anti-collision (flrc 684a158 / 97b895a): incrementing
+//   counter mixed with monotonic ns + ms, 0 skipped.
+// - Precomputed per-burst CRC32 (flrc 97b895a): computed once before the
+//   packet loop so 50-packet bursts don't recompute CRC32 inside the 220 µs gap.
+// - Immediate RX re-arm before UART emission: armReceive() runs right after
+//   SPI readData() so serial write latency cannot delay catching the next
+//   chunk in a 50-packet burst.
 // - READY v2 / CONFIG v2 selectors (flrc 87509e1): DELIBERATELY NOT
 //   ported — the flashed nRF build predates the v2 READY (no version
 //   byte; the node logs "did not negotiate v2") while running the 511 B
@@ -207,20 +213,24 @@ bool RadioWorker::transmitBurst(const uint8_t *payload, size_t len,
     *err = "bad burst size";
     return false;
   }
-  // Per-boot offset so on-air burst ids don't collide across nodes.
-  uint32_t boot = nowMs() | 1u;
-  uint16_t burst_id = static_cast<uint16_t>((burst_id_counter_++) ^
-                                            (boot ^ (boot >> 16)));
+  // Per-burst jittered offset so on-air burst ids don't collide across nodes.
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  uint32_t entropy = static_cast<uint32_t>(ts.tv_nsec) ^
+                     (static_cast<uint32_t>(ts.tv_sec) * 0x9E3779B9u) ^
+                     (burst_id_counter_++ * 0x85EBCA6Bu);
+  uint16_t burst_id = static_cast<uint16_t>(entropy ^ (entropy >> 16));
   if (burst_id == 0) {
     burst_id = 1;
   }
   st_.bursts_tx++;
 
+  uint32_t payload_crc = crc32(payload, len);
   std::vector<uint8_t> pkt(kPacketPayload);
   for (uint16_t idx = 0; idx < total; idx++) {
     size_t pkt_len = 0;
     encode_packet(pkt.data(), pkt.size(), burst_id, idx, total, payload, len,
-                  &pkt_len);
+                  payload_crc, &pkt_len);
     radio_->startTransmit(pkt.data(), pkt_len);
     st_.packets_tx++;
     // Poll for TX_DONE (1<<19); 2 s timeout, 100 µs poll cadence.
@@ -303,7 +313,10 @@ void RadioWorker::workerLoop() {
     if (irq & RADIOLIB_LR20xx_IRQ_RX_DONE) {
       int16_t rssi = radio_->getRSSI();
       size_t len = kPacketPayload;
-      if (radio_->readData(pkt, len) == RADIOLIB_ERR_NONE) {
+      bool read_ok = (radio_->readData(pkt, len) == RADIOLIB_ERR_NONE);
+      armReceive(); // immediate re-arm before UART emission so serial write
+                    // latency never delays catching the next chunk in a burst.
+      if (read_ok) {
         st_.packets_rx++;
         st_.bursts_rx++;
         if (rssi > scan_best_rssi_ && scan_active_) {
@@ -319,8 +332,6 @@ void RadioWorker::workerLoop() {
           cb_.on_rx_packet(pkt, len, rssi);
         }
       }
-      armReceive(); // immediate re-arm — the burst-turnaround race is the
-                    // Phase-1 gate; turnaround is bounded by this loop.
     } else if (irq & RADIOLIB_LR20xx_IRQ_TIMEOUT) {
       armReceive();
     }
