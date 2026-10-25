@@ -25,14 +25,14 @@ enum class Terminal : uint8_t {
 };
 
 struct Config {
-  uint32_t frequency_hz = 916500000;
-  int8_t tx_power_dbm = 20;
+  uint32_t frequency_hz = 915000000;
+  int8_t tx_power_dbm = 22;
   uint8_t role = 0; // 0=BOTH 1=TX_ONLY 2=RX_ONLY
 };
 
 struct ScanParams {
-  uint32_t start_hz = 916500000;
-  uint32_t step_hz = 500000;
+  uint32_t start_hz = 915000000;
+  uint32_t step_hz = 1000000;
   uint8_t count = 6;
   uint32_t dwell_ms = 300;
 };

@@ -103,8 +103,8 @@ bool RadioWorker::init(const Callbacks &cb, int power_gpio) {
   // FLRC 2.6 Mbps (BR_2_600_BW_2_6 = 0x00), CR 1/1 — the air profile the
   // nRF nodes use (their CONFIG coding_rate is stored but never applied).
   // tcxo 1.8 V per the EVK (matches the nRF overlay's tcxo-voltage).
-  int16_t st = k->beginFLRC(916.5f, RADIOLIB_LR20xx_FLRC_BR_2_600_BW_2_6,
-                            1, 20, 16, 1.8f, 0);
+  int16_t st = k->beginFLRC(915.0f, RADIOLIB_LR20xx_FLRC_BR_2_600_BW_2_6,
+                            1, 22, 16, 1.8f, 0);
   if (st != RADIOLIB_ERR_NONE) {
     if (cb_.on_log) {
       cb_.on_log("radio init failed: " + std::to_string(st));
