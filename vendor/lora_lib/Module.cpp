@@ -374,7 +374,7 @@ int16_t Module::SPItransferStream(const uint8_t* cmd, uint8_t cmdLen, bool write
   if(waitForGpio) {
     if(this->gpioPin == RADIOLIB_NC) {
       //this->hal->delay(1);
-      this->hal->delayMicroseconds(50);//50
+      this->hal->delayMicroseconds(15);//15
     } else {
       this->hal->delayMicroseconds(1);
       RadioLibTime_t start = this->hal->millis();

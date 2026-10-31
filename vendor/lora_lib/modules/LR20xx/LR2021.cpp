@@ -45,9 +45,9 @@ int16_t LR2021::begin(float freq, float bw, uint8_t sf, uint8_t cr, uint8_t sync
     state=setPa(0);
     RADIOLIB_ASSERT(state);
     printf("setPa,state:%d\n",state);
-    state=setRxPath(0,0);//LR20XX_RADIO_COMMON_PA_SEL_LF:0x00,LR20XX_RADIO_COMMON_PA_SEL_HF:0x01  rx_boost:0-7 5
+    state=setRxPath(0,4);//LR20XX_RADIO_COMMON_PA_SEL_LF:0x00,LR20XX_RADIO_COMMON_PA_SEL_HF:0x01  rx_boost:0-7 5
     RADIOLIB_ASSERT(state);
-    printf("setRxPath0 after\n");
+    printf("setRxPath4_LF after\n");
   }
   else//2400MHZ
   {
@@ -175,9 +175,9 @@ int16_t LR2021::beginFLRC(float freq, uint16_t br_bw, uint8_t cr2, int8_t power2
     state=setPa(0);
     RADIOLIB_ASSERT(state);
     printf("setPa,state:%d\n",state);
-    state=setRxPath(0,0);//LR20XX_RADIO_COMMON_PA_SEL_LF:0x00,LR20XX_RADIO_COMMON_PA_SEL_HF:0x01  rx_boost:0-7 5
+    state=setRxPath(0,4);//LR20XX_RADIO_COMMON_PA_SEL_LF:0x00,LR20XX_RADIO_COMMON_PA_SEL_HF:0x01  rx_boost:0-7 5
     RADIOLIB_ASSERT(state);
-    printf("setRxPath0 after\n");
+    printf("setRxPath4_LF after\n");
   }
   else//2400MHZ
   {
@@ -217,7 +217,10 @@ int16_t LR2021::beginFLRC(float freq, uint16_t br_bw, uint8_t cr2, int8_t power2
 
 
 int16_t LR2021::setFrequency(float freq) {
-  return(this->setFrequency(freq, true));//true 
+  static bool s_fe_calibrated = false;
+  bool cal = !s_fe_calibrated;
+  s_fe_calibrated = true;
+  return(this->setFrequency(freq, cal));
 }
 
 int16_t LR2021::setFrequency(float freq, bool calibrate, float band) {
@@ -240,9 +243,8 @@ int16_t LR2021::setFrequency(float freq, bool calibrate, float band) {
     RADIOLIB_ASSERT(state);
     printf("lr2021,calibrate_front_end.PA_SEL_HF,state:%d\n",state);
     }
+    usleep(50000);
   }
-  //usleep(155000); //5000
-  usleep(500000);
   // set frequency
   return(LR20xx::setRfFrequency((uint32_t)(freq*1000000.0f)));
 }

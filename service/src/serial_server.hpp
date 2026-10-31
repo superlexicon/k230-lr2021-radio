@@ -44,8 +44,11 @@ public:
   SerialServer(radio::RadioWorker *worker, const std::string &uart_path,
                uint32_t baud);
 
-  // Opens the UART, sends READY once the worker reports radio-ok, then
-  // runs the forever loop (call from its own thread).
+  // Opens the UART/IPC, sends READY once the worker reports radio-ok.
+  void init();
+  // Non-blocking poll step for the single-threaded RT-SMART superloop.
+  void pollOnce();
+  // Legacy blocking loop.
   void run();
 
   // Worker-callback entries (thread-safe; each emitter takes write_mu_).
@@ -78,6 +81,14 @@ private:
   std::string uart_path_;
   uint32_t baud_;
   int fd_ = -1;
+  int listen_fd_ = -1;
+  bool is_tcp_ = false;
+  bool is_ipc_ = false;
+  std::string ipc_path_;
+  uint16_t tcp_port_ = 0;
+  uint8_t ipc_rx_buf_[4096];
+  size_t ipc_rx_pos_ = 0;
+  size_t ipc_rx_len_ = 0;
 
   // parser state
   State state_ = State::kTag;

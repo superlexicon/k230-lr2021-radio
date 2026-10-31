@@ -26,14 +26,14 @@ enum class Terminal : uint8_t {
 
 struct Config {
   uint32_t frequency_hz = 915000000;
-  int8_t tx_power_dbm = 22;
+  int8_t tx_power_dbm = 10;
   uint8_t role = 0; // 0=BOTH 1=TX_ONLY 2=RX_ONLY
 };
 
 struct ScanParams {
-  uint32_t start_hz = 915000000;
+  uint32_t start_hz = 902000000;
   uint32_t step_hz = 1000000;
-  uint8_t count = 6;
+  uint8_t count = 27;
   uint32_t dwell_ms = 300;
 };
 
@@ -72,6 +72,10 @@ public:
   void snapshot(stats::Counters *out, uint32_t uptime_ms);
 
   bool radioOk() const { return radio_ok_; }
+  int thermalLevel() const { return thermal_level_; }
+
+  // Single-step poll for the single-threaded RT-SMART superloop.
+  void pollOnce();
 
   // Thread entry — runs the forever loop (spawn from main via pthread).
   void workerLoop();
@@ -81,15 +85,26 @@ private:
   bool transmitBurst(const uint8_t *payload, size_t len, std::string *err);
   void armReceive();
   void scanTick(uint32_t now_ms);
+  void thermalTick(uint32_t now_ms);
   static uint32_t nowMs();
   static void sleepUs(uint32_t us);
 
   Callbacks cb_;
   LR2021 *radio_ = nullptr; // RadioLib wrapper (Module-allocated)
   bool radio_ok_ = false;
+  int power_gpio_ = 44;
+  int thermal_level_ = 0; // 0=normal, 1=throttle (>=70C), 2=cutoff (>=80C)
+  bool thermal_powered_down_ = false;
+  uint32_t last_thermal_check_ms_ = 0;
+  int fd_ts_ = -1;
+  int fd_gpio_ = -1;
+  bool fan_on_ = false;
+  bool pm_initialized_ = false;
+  int cpu_dvfs_stage_ = -1;
   Config cfg_{};
   ScanParams scan_{};
   bool scan_active_ = false;
+  uint32_t pre_scan_freq_hz_ = 915000000;
   uint8_t scan_idx_ = 0;
   uint32_t scan_dwell_until_ = 0;
   uint32_t scan_frames_ = 0;
@@ -97,6 +112,7 @@ private:
   int8_t scan_best_rssi_ = -128;
 
   std::mutex tx_mu_;
+  std::recursive_mutex radio_mu_;
   std::queue<std::vector<uint8_t>> tx_q_;
   stats::Counters st_{};
   uint32_t burst_id_counter_ = 1;

@@ -5,6 +5,7 @@
 // READY as soon as the worker reports radio-ok, satisfying the host's
 // handshake (CONFIG re-sent every ~1 s until 'G').
 #include <pthread.h>
+#include <unistd.h>
 
 #include <cstdio>
 
@@ -55,10 +56,23 @@ int main(int argc, char **argv) {
   static serial::SerialServer server(&g_worker, uart, baud);
   g_server = &server;
 
-  pthread_t th;
-  pthread_create(&th, nullptr, worker_entry, nullptr);
+  server.init();
 
-  printf("[main] radio service up: uart=%s baud=%u\n", uart, baud);
-  server.run(); // never returns
+  printf("[main] radio service up (single-thread superloop): uart=%s baud=%u\n", uart, baud);
+  for (;;) {
+    server.pollOnce();
+    g_worker.pollOnce();
+    int tlvl = g_worker.thermalLevel();
+    if (tlvl >= 2) {
+      struct timespec slp{0, 250000000}; // 250 ms cooldown sleep during thermal cutoff
+      nanosleep(&slp, nullptr);
+    } else if (tlvl == 1) {
+      struct timespec slp{0, 10050000};  // 10 ms throttled poll
+      nanosleep(&slp, nullptr);
+    } else {
+      struct timespec slp{0, 2050000};   // 2 ms bench low-power poll (2 RT-SMART ticks)
+      nanosleep(&slp, nullptr);
+    }
+  }
   return 0;
 }

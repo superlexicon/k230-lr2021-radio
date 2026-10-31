@@ -288,19 +288,35 @@ int16_t LR20xx::beginFLRC(uint16_t br, uint8_t cr,uint16_t preambleLength,float 
  
   
   this->headerType=0;
-  this->implicitLen=229;//64  8 230
-  this->preambleLengthFLRC=RADIOLIB_LR20xx_FLRC_PREAMBLE_LEN_24_BITS;//16
+  this->implicitLen=511;
+  this->preambleLengthFLRC=RADIOLIB_LR20xx_FLRC_PREAMBLE_LEN_32_BITS;
   this->crcTypeFLRC=RADIOLIB_LR20xx_FLRC_CRC_2_BYTES;
-   state = setPacketParamsFLRC(this->preambleLengthFLRC,RADIOLIB_LR20xx_FLRC_SYNCWORD_LENGTH_4_BYTES, RADIOLIB_LR20xx_FLRC_RX_MATCH_SYNCWORD_1,this->headerType, this->implicitLen, this->crcTypeFLRC);
-   RADIOLIB_ASSERT(state);
+  state = setPacketParamsFLRC(this->preambleLengthFLRC,RADIOLIB_LR20xx_FLRC_SYNCWORD_LENGTH_4_BYTES, RADIOLIB_LR20xx_FLRC_RX_MATCH_SYNCWORD_1,this->headerType, this->implicitLen, this->crcTypeFLRC);
+  RADIOLIB_ASSERT(state);
   printf("setPacketParamsFLRC after \n");
-  
-  /*state=this->setFLRCSyncWord(1,0x55555555);//0x55555555
+
+  state = setGfskCrcParams(0xFFFFFFFFu, 0x0000755Bu);
   RADIOLIB_ASSERT(state);
-  printf("setFLRCSyncWord after\n");*/
-  
-   state=configFifoIrq(0x3F,0x3F,229,0,0,229);//RADIOLIB_LR20xx_FIFO_FLAG_THRESHOLD_HIGH
+
+  {
+    uint32_t tx_fifo_addr = 0x00804000u;
+    uint32_t tx_fifo_size = 0x000003FCu;
+    uint32_t rx_fifo_addr = 0x00804400u;
+    uint32_t rx_fifo_size = 0x000003E8u;
+    writeRegMem32(0x00F3002Cu, &tx_fifo_addr, 1);
+    writeRegMem32(0x00F30034u, &tx_fifo_size, 1);
+    writeRegMem32(0x00F30028u, &rx_fifo_addr, 1);
+    writeRegMem32(0x00F30030u, &rx_fifo_size, 1);
+  }
+
+   state=configFifoIrq(0x3F,0x3F,511,0,0,511);//RADIOLIB_LR20xx_FIFO_FLAG_THRESHOLD_HIGH
   RADIOLIB_ASSERT(state);
+  {
+    uint32_t rx_thresh = (511u << 16);
+    uint32_t tx_thresh = (511u << 16);
+    writeRegMem32(0x00F2A098u, &rx_thresh, 1);
+    writeRegMem32(0x00F2A09Cu, &tx_thresh, 1);
+  }
   printf("configFifoIrq after \n");
   
   
@@ -659,24 +675,12 @@ int16_t LR20xx::startTransmit(uint8_t* data, size_t len, uint8_t addr) {
     printf("setPacketParamsGFSK after,state:%d \n",state);*/
   } else if(modem == RADIOLIB_LR20xx_PACKET_TYPE_FLRC)
   {
-   /*this->headerType=0;
-  this->implicitLen=len;//64  8 230
-  this->preambleLengthFLRC=RADIOLIB_LR20xx_FLRC_PREAMBLE_LEN_24_BITS;//16
-  this->crcTypeFLRC=RADIOLIB_LR20xx_FLRC_CRC_2_BYTES;
-   state = setPacketParamsFLRC(this->preambleLengthFLRC,RADIOLIB_LR20xx_FLRC_SYNCWORD_LENGTH_4_BYTES, RADIOLIB_LR20xx_FLRC_RX_MATCH_SYNCWORD_1,this->headerType, this->implicitLen, this->crcTypeFLRC);*/
-
- /* this->headerType=1;//0
-
-  this->implicitLen=len;
-
-  this->preambleLengthFLRC=RADIOLIB_LR20xx_FLRC_PREAMBLE_LEN_32_BITS;
-
-  this->crcTypeFLRC=RADIOLIB_LR20xx_FLRC_CRC_OFF;
-
-   state = setPacketParamsFLRC(this->preambleLengthFLRC,RADIOLIB_LR20xx_FLRC_SYNCWORD_LENGTH_2_BYTES, RADIOLIB_LR20xx_FLRC_RX_MATCH_SYNCWORD_1,this->headerType, len, this->crcTypeFLRC);
-
-  printf("setPacketParamsFLRC after \n");*/
-
+    this->headerType=0;
+    this->implicitLen=len;
+    this->preambleLengthFLRC=RADIOLIB_LR20xx_FLRC_PREAMBLE_LEN_32_BITS;
+    this->crcTypeFLRC=RADIOLIB_LR20xx_FLRC_CRC_2_BYTES;
+    state = setPacketParamsFLRC(this->preambleLengthFLRC, RADIOLIB_LR20xx_FLRC_SYNCWORD_LENGTH_4_BYTES, RADIOLIB_LR20xx_FLRC_RX_MATCH_SYNCWORD_1, this->headerType, len, this->crcTypeFLRC);
+    RADIOLIB_ASSERT(state);
   }else if(modem != RADIOLIB_LR20xx_PACKET_TYPE_LRFHSS ) {
 
     return(RADIOLIB_ERR_UNKNOWN);
@@ -684,9 +688,8 @@ int16_t LR20xx::startTransmit(uint8_t* data, size_t len, uint8_t addr) {
   
 
   }
-  //state = clearIrq(RADIOLIB_LR20xx_IRQ_ALL);
-
-  //RADIOLIB_ASSERT(state);
+  state = clearIrq(RADIOLIB_LR20xx_IRQ_ALL);
+  RADIOLIB_ASSERT(state);
   //printf("clearIrq after \n");
   
   
@@ -734,7 +737,7 @@ int16_t LR20xx::startTransmit(uint8_t* data, size_t len, uint8_t addr) {
   //state = setTxCw(0);
   //printf("setTx(),state:%d\n",state);
   RADIOLIB_ASSERT(state);
-  printf("setTx after \n");
+  //printf("setTx after \n");
    
    
 
@@ -918,18 +921,15 @@ int16_t LR20xx::startReceive(uint32_t timeout, uint32_t irqFlags, uint32_t irqMa
      printf("preambleLengthLoRa:%d,headerType:%d,implicitLen:%d,crcTypeLoRa:%d,invertIQEnabled:%d\n",this->preambleLengthLoRa, this->headerType, this->implicitLen, this->crcTypeLoRa, this->invertIQEnabled);
     printf("setPacketParamsLoRa,state:%d\n",state);
   } 
-  //if((this->headerType == 0) && (modem == RADIOLIB_LR20xx_PACKET_TYPE_FLRC))
- /* if(modem == RADIOLIB_LR20xx_PACKET_TYPE_FLRC)
+  if(modem == RADIOLIB_LR20xx_PACKET_TYPE_FLRC)
   {
-  this->headerType=1;
-  this->implicitLen=8;//64
-  this->preambleLengthFLRC=RADIOLIB_LR20xx_FLRC_PREAMBLE_LEN_32_BITS;
-
-  this->crcTypeFLRC=RADIOLIB_LR20xx_FLRC_CRC_OFF;
-   state = setPacketParamsFLRC(this->preambleLengthFLRC,RADIOLIB_LR20xx_FLRC_SYNCWORD_LENGTH_2_BYTES, RADIOLIB_LR20xx_FLRC_RX_MATCH_SYNCWORD_1,this->headerType, this->implicitLen, this->crcTypeFLRC);
-  printf("setPacketParamsFLRC after \n");
-
-  }*/
+    this->headerType=0;
+    this->implicitLen=511;
+    this->preambleLengthFLRC=RADIOLIB_LR20xx_FLRC_PREAMBLE_LEN_32_BITS;
+    this->crcTypeFLRC=RADIOLIB_LR20xx_FLRC_CRC_2_BYTES;
+    state = setPacketParamsFLRC(this->preambleLengthFLRC, RADIOLIB_LR20xx_FLRC_SYNCWORD_LENGTH_4_BYTES, RADIOLIB_LR20xx_FLRC_RX_MATCH_SYNCWORD_1, this->headerType, this->implicitLen, this->crcTypeFLRC);
+    RADIOLIB_ASSERT(state);
+  }
   
    if(modem == RADIOLIB_LR20xx_PACKET_TYPE_FSK) {
   /*this->preambleLengthGFSK=32;
@@ -1120,20 +1120,11 @@ int16_t LR20xx::readData(uint8_t* data, size_t len) {
     length = len;
   }*/
   uint8_t offset = 0;
-   size_t length=len;
-  // read packet data
+  size_t length = len;
+  // read packet data (pops `length` bytes from the LR2021 RX FIFO; do NOT call
+  // clearRxBuffer() here so consecutive packets in a 220us FLRC burst are not wiped!)
   state = readBuffer8(data, length, offset);
   RADIOLIB_ASSERT(state);
-  //printf("readBuffer8 after\n");
-  // clear the Rx buffer
-  state = clearRxBuffer();
-  RADIOLIB_ASSERT(state);
-
-  // clear interrupt flags
-  /*state = clearIrq(RADIOLIB_LR20xx_IRQ_ALL);
-
-  // check if CRC failed - this is done after reading data to give user the option to keep them
-  RADIOLIB_ASSERT(crcState);*/
 
   return(state);
 }
@@ -2436,7 +2427,7 @@ int16_t LR20xx::patch_load_pram(const uint32_t address, const uint32_t* buffer,
     RADIOLIB_DEBUG_BASIC_PRINTLN("Writing chunk %d at offset %08lx (%u words)", (int)i, (unsigned long)offset, (unsigned int)len);
     //this->bootWriteFlashEncrypted(offset*sizeof(uint32_t), (uint32_t*)&image[offset], len, nonvolatile);
     //this->writeCommon(RADIOLIB_LR11X0_CMD_BOOT_WRITE_FLASH_ENCRYPTED, offset, ((uint32_t*)&)buffer[offset], len, nonvolatile);
-    int16_t state=this->writeRegMem32(address+offset,(uint32_t*)&buffer[offset], len);
+    int16_t state=this->writeRegMem32(address + offset * 4, (uint32_t*)&buffer[offset], len);
     RADIOLIB_ASSERT(state);
   }
 
@@ -2995,19 +2986,38 @@ int16_t LR20xx::writeBuffer8(uint8_t* data, size_t len) {
   if(len > RADIOLIB_LR20xx_SPI_MAX_READ_WRITE_LEN) {
     return(RADIOLIB_ERR_SPI_CMD_INVALID);
   }
-  return(this->SPIcommand(RADIOLIB_LR20xx_CMD_WRITE_BUFFER, true, data, len));
+  // K230 DW SSI RX FIFO is 256 bytes; chunk into <= 128-byte SPI FIFO pushes
+  size_t off = 0;
+  while(off < len) {
+    size_t chunk = (len - off > 128) ? 128 : (len - off);
+    int16_t st = this->SPIcommand(RADIOLIB_LR20xx_CMD_WRITE_BUFFER, true, data + off, chunk);
+    RADIOLIB_ASSERT(st);
+    off += chunk;
+  }
+  return(RADIOLIB_ERR_NONE);
 }
 
 int16_t LR20xx::readBuffer8(uint8_t* data, size_t len, size_t offset) {
+  (void)offset;
   // check maximum size
   if(len > RADIOLIB_LR20xx_SPI_MAX_READ_WRITE_LEN) {
     return(RADIOLIB_ERR_SPI_CMD_INVALID);
   }
-   uint16_t cmd_read=RADIOLIB_LR20xx_CMD_READ_BUFFER;
-   uint8_t cmdBuf[2]={(uint8_t)((cmd_read>>8)&0xFF),(uint8_t)(cmd_read&0xFF)};
-this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_STATUS] = Module::BITS_0;
- int16_t state = this->mod->SPItransferStream(cmdBuf, sizeof(cmdBuf), false, NULL, data, len, true);
- this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_STATUS] = Module::BITS_16; 
+  uint16_t cmd_read = RADIOLIB_LR20xx_CMD_READ_BUFFER;
+  uint8_t cmdBuf[2] = {(uint8_t)((cmd_read >> 8) & 0xFF), (uint8_t)(cmd_read & 0xFF)};
+  // K230 DW SSI RX FIFO is 256 bytes; chunk into <= 128-byte SPI FIFO pops
+  size_t off = 0;
+  int16_t state = RADIOLIB_ERR_NONE;
+  while(off < len) {
+    size_t chunk = (len - off > 128) ? 128 : (len - off);
+    this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_STATUS] = Module::BITS_0;
+    state = this->mod->SPItransferStream(cmdBuf, sizeof(cmdBuf), false, NULL, data + off, chunk, false);
+    this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_STATUS] = Module::BITS_16;
+    if(state != RADIOLIB_ERR_NONE) {
+      break;
+    }
+    off += chunk;
+  }
   return(state);
 }
 
@@ -4543,9 +4553,9 @@ int16_t LR20xx::bootGetJoinEui(uint8_t* eui) {
 int16_t LR20xx::writeCommon(uint16_t cmd, uint32_t addrOffset, const uint32_t* data, size_t len, bool nonvolatile) {
   // build buffers - later we need to ensure endians are correct, 
   // so there is probably no way to do this without copying buffers and iterating
-  size_t buffLen = sizeof(uint32_t) + len*sizeof(uint32_t);
+  size_t buffLen = 3 + len*sizeof(uint32_t);
   #if RADIOLIB_STATIC_ONLY
-    uint8_t dataBuff[sizeof(uint32_t) + RADIOLIB_LR11X0_SPI_MAX_READ_WRITE_LEN];
+    uint8_t dataBuff[3 + RADIOLIB_LR11X0_SPI_MAX_READ_WRITE_LEN];
   #else
     uint8_t* dataBuff = new uint8_t[buffLen];
   #endif

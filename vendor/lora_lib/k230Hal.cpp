@@ -86,13 +86,12 @@ void machine_soft_spi_init(int fd,uint8_t polarity,uint8_t phase,uint8_t sck,uin
     }
 
 void machine_soft_spi_transfer(int fd, size_t len, const void *src, void *dest) {
-
-		struct rt_spi_priv_data *priv_data = (struct rt_spi_priv_data *)malloc(sizeof(struct rt_spi_priv_data));
-		priv_data->send_buf = src;
-		priv_data->send_length = len;
-		priv_data->recv_buf = dest;
-		ioctl(fd, MP_SPI_IOCTL_TRANSFER, priv_data);	
-		free(priv_data);   
+		struct rt_spi_priv_data priv_data;
+		priv_data.send_buf = src;
+		priv_data.send_length = len;
+		priv_data.recv_buf = dest;
+		priv_data.recv_length = len;
+		ioctl(fd, MP_SPI_IOCTL_TRANSFER, &priv_data);
 	}
 
 
@@ -135,13 +134,12 @@ void machine_hw_spi_init(int fd,uint8_t polarity,uint8_t phase,uint32_t baud) {
     }
 
 void machine_hw_spi_transfer(int fd, size_t len, const void *src, void *dest) {
-
-		struct rt_spi_priv_data *priv_data = (struct rt_spi_priv_data *)malloc(sizeof(struct rt_spi_priv_data));
-		priv_data->send_buf = src;
-		priv_data->send_length = len;
-		priv_data->recv_buf = dest;
-		priv_data->recv_length=len;
-		 if (dest == NULL) {
+		struct rt_spi_priv_data priv_data;
+		priv_data.send_buf = src;
+		priv_data.send_length = len;
+		priv_data.recv_buf = dest;
+		priv_data.recv_length = len;
+		if (dest == NULL) {
         struct rt_spi_configuration cfg = {
             .mode = DWENUM_SPI_TX,
             .data_width = hw_spi.bits,
@@ -157,18 +155,15 @@ void machine_hw_spi_transfer(int fd, size_t len, const void *src, void *dest) {
         };
         ioctl(fd, RT_SPI_DEV_CTRL_CONFIG, &cfg);
         read(fd, dest,len);
-    }else {
+    } else {
         struct rt_spi_configuration cfg = {
             .mode = DWENUM_SPI_EEPROM,
             .data_width = hw_spi.bits,
             .max_hz = hw_spi.baud,
         };
         ioctl(fd, RT_SPI_DEV_CTRL_CONFIG, &cfg);      
-        ioctl(fd, RT_SPI_DEV_CTRL_RW, priv_data);
+        ioctl(fd, RT_SPI_DEV_CTRL_RW, &priv_data);
     }
-    //printf("fd:%d,dest[0]:%02X,dest[1]:%02X",fd,(((uint8_t*)(priv_data->recv_buf))[0]),(((uint8_t*)(priv_data->recv_buf))[1]));
-    //printf("fd:%d,dest[0]:%02X,dest[1]:%02X",fd,((uint8_t*)dest)[0],((uint8_t*)dest)[1]);
-		free(priv_data);   
 	}
 
 void machine_hw_spi_write_readinto(int fd, char* send,int send_len,char*recv,int recv_len) {

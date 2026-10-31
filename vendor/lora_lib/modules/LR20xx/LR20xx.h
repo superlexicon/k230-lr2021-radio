@@ -22,7 +22,7 @@
 
 // LR11X0 physical layer properties
 #define RADIOLIB_LR11X0_FREQUENCY_STEP_SIZE                     1.0
-#define RADIOLIB_LR11X0_MAX_PACKET_LENGTH                       255
+#define RADIOLIB_LR11X0_MAX_PACKET_LENGTH                       511
 #define RADIOLIB_LR11X0_CRYSTAL_FREQ                            32.0
 #define RADIOLIB_LR11X0_DIV_EXPONENT                            25
 
@@ -354,7 +354,7 @@
 #define RADIOLIB_LR11X0_STAT_2_FLASH                            (0x01UL << 0)   //  0     0                         flash
 
 // RADIOLIB_LR20xx_CMD_WRITE_REG_MEM
-#define RADIOLIB_LR20xx_SPI_MAX_READ_WRITE_LEN                  (256)           //  7     0     maximum length of read/write SPI payload in bytes
+#define RADIOLIB_LR20xx_SPI_MAX_READ_WRITE_LEN                  (512)           //  7     0     maximum length of read/write SPI payload in bytes
 
 // RADIOLIB_LR11X0_CMD_GET_VERSION
 #define RADIOLIB_LR20xx_DEVICE_LR2021			          (0x00UL << 0)   //  7     0     HW device: LR20xx
